@@ -36,7 +36,7 @@ export function AppearanceRating({ scan, settings }: { scan: StoredScan; setting
     <p className="eyebrow">APPEARANCE MODEL · RESEARCH</p>
     <h2 id="appearance-rating-title">A rating needs evidence.</h2>
     <p>The geometry index describes alignment with reference proportions. A looks estimate must learn independent human ratings and prove useful on new people.</p>
-    <p><strong>{measured} reliable geometry inputs available.</strong> Missing or inferred anatomy stays excluded. No validated overall appearance model is installed.</p>
+    <p><strong>{measured} geometry inputs available for research.</strong> Missing measurements and unreviewed anatomical estimates stay excluded. No validated overall appearance model is installed.</p>
     <details className="metric-details">
       <summary>Inspect a local research model</summary>
       <p>Load the JSON artifact from a FaceLab training run. The model and measurements remain in this browser tab. The preview estimates the source panel’s mean rating of a frontal photograph, using its original rating scale.</p>
