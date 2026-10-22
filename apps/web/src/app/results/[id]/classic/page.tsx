@@ -225,7 +225,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
         </p>
       )}
 
-      {/* Overall — population score leads, band-fit harmony below */}
+      {/* Legacy reference-corpus geometry comparison, separate from human ratings */}
       <div
         className={`card px-5 py-4 flex flex-col gap-2 ${
           scan.ai?.sanity?.confidence === "low" ? "opacity-50" : ""
@@ -237,14 +237,14 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
               <div>
                 <p className="label-caps">Calibration comparison</p>
                 <p className="text-lg">
-                  Top {Math.max(1, 100 - result.overallPercentile)}% in the reference sample
+                  Geometry percentile {result.overallPercentile} in the reference sample
                 </p>
               </div>
               <p className="numeral text-4xl">{result.standardized.toFixed(1)}</p>
             </div>
             <div className="flex items-baseline justify-between border-t border-line pt-2">
               <span className="text-xs text-ink-2">
-                50 = reference median · 15 pts = 1 sample SD
+                50 = reference mean · 15 pts = 1 sample SD
               </span>
               <span className="text-xs text-ink-2">
                 harmony{" "}

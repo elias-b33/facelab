@@ -1,0 +1,26 @@
+{
+  "datasetId": "REPLACE_WITH_ACTUAL_DATASET_ID",
+  "datasetName": "REPLACE_WITH_ACTUAL_STUDY_NAME",
+  "sourceUrl": "https://example.invalid/REPLACE_WITH_ACTUAL_SOURCE",
+  "license": "REPLACE_WITH_ACTUAL_PERMISSION_OR_LICENSE_REFERENCE",
+  "usage": "research",
+  "identityProtocol": "REPLACE_WITH_ACTUAL_UNIQUE_PERSON_AUDIT_AND_PHOTO_SELECTION_METHOD",
+  "synthetic": false,
+  "featureSchema": "facelab-frontal-geometry-v1",
+  "engineVersion": "0.2.0-rating",
+  "target": {
+    "label": "REPLACE_WITH_ACTUAL_HUMAN_PANEL_RATING_LABEL",
+    "min": 1,
+    "max": 5,
+    "population": "REPLACE_WITH_ACTUAL_RATER_POPULATION_AND_INTENDED_SCOPE",
+    "protocol": "REPLACE_WITH_ACTUAL_QUESTION_SCALE_ANCHORS_CAPTURE_PROTOCOL_AND_RATER_INSTRUCTIONS"
+  },
+  "templateNotes": [
+    "THIS IS A TEMPLATE, NOT A DATASET OR EVIDENCE OF VALIDATION.",
+    "Replace every REPLACE field and example.invalid source before fitting.",
+    "The 1-to-5 bounds illustrate a source scale; replace both with the actual study scale and preserve it in every label row.",
+    "synthetic:false is only a declaration. Set true for generated test data; never describe generated numbers as human judgments.",
+    "usage:research does not grant permission. Verify the original source terms for your intended use.",
+    "No images, identities, or human ratings are provided by this template."
+  ]
+}

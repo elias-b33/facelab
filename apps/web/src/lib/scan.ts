@@ -3,6 +3,7 @@
 import type { FaceLandmarkerResult } from "@mediapipe/tasks-vision";
 import {
   analyze,
+  ENGINE_VERSION,
   type Gate,
   type ScanInput,
   type ScanResult,
@@ -97,7 +98,7 @@ export async function runScan(
       overallPercentile: null,
       standardized: null,
       tier: null,
-      engineVersion: "0.1.0",
+      engineVersion: ENGINE_VERSION,
       bandProfile: "faceharmony-parity",
       sex,
     };
@@ -155,8 +156,8 @@ export async function runScan(
 
 /**
  * Re-run the engine against the stored (downscaled) photo — used by Adjust
- * Points and profile changes. Metrics are scale-invariant, so analyzing at
- * 768px reproduces the original values.
+ * Points and profile changes. Landmark ratios are approximately scale-invariant;
+ * resizing and JPEG compression can change pixel-quality gates and confidence.
  */
 export async function reanalyze(
   stored: StoredInput,

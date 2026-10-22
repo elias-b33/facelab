@@ -13,6 +13,8 @@ export interface PoseEstimate {
  * Detect whether a flat 16-float 4x4 is column-major or row-major.
  * In a rigid transform exactly one of the two candidate off-diagonal triples
  * is ~0 (the perspective row) while the other carries the translation.
+ * With zero translation the layout is ambiguous; retain the row-major
+ * convention for that case. A camera-relative MediaPipe pose has translation.
  */
 export function isColumnMajor(d: number[]): boolean {
   const a = Math.abs(d[3]!) + Math.abs(d[7]!) + Math.abs(d[11]!);
@@ -38,6 +40,30 @@ function rotationFromFlat(d: number[]): Mat3 {
   ];
 }
 
+/** A face pose is an affine proper rotation, optionally with uniform scale.
+ * Zero, non-finite, perspective, reflection and shearing matrices must not
+ * turn into a confident "straight-on" pose through atan2(0, 0). */
+export function isValidPoseMatrix(d: number[] | undefined): d is number[] {
+  if (!Array.isArray(d) || d.length !== 16) return false;
+  for (let i = 0; i < 16; i++) if (!Number.isFinite(d[i])) return false;
+  if (Math.abs(d[15]! - 1) > 1e-4) return false;
+  const perspective = isColumnMajor(d) ? [d[3]!, d[7]!, d[11]!] : [d[12]!, d[13]!, d[14]!];
+  if (perspective.some(value => Math.abs(value) > 1e-4)) return false;
+  const r = rotationFromFlat(d);
+  const norms = r.map(row => Math.hypot(...row));
+  const scale = (norms[0]! + norms[1]! + norms[2]!) / 3;
+  if (!Number.isFinite(scale) || scale < 1e-6 || norms.some(n => Math.abs(n / scale - 1) > .02)) return false;
+  const normalized = r.map(row => row.map(v => v / scale));
+  for (let a = 0; a < 3; a++) for (let b = a + 1; b < 3; b++) {
+    const dot = normalized[a]!.reduce((sum, value, i) => sum + value * normalized[b]![i]!, 0);
+    if (Math.abs(dot) > .02) return false;
+  }
+  const [a, b, c] = normalized as [number[], number[], number[]];
+  const determinant = a[0]! * (b[1]! * c[2]! - b[2]! * c[1]!) -
+    a[1]! * (b[0]! * c[2]! - b[2]! * c[0]!) + a[2]! * (b[0]! * c[1]! - b[1]! * c[0]!);
+  return Math.abs(determinant - 1) <= .03;
+}
+
 const RAD2DEG = 180 / Math.PI;
 
 /**
@@ -49,6 +75,7 @@ export function eulerFromMatrix(d: number[]): {
   yawDeg: number;
   rollDeg: number;
 } {
+  if (!isValidPoseMatrix(d)) throw new RangeError("The face pose matrix is not a finite rigid transformation.");
   const r = rotationFromFlat(d);
   const pitch = Math.atan2(r[2]![1]!, r[2]![2]!);
   const yaw = Math.atan2(
@@ -64,16 +91,22 @@ export function eulerFromMatrix(d: number[]): {
 }
 
 /**
- * Landmark yaw proxy: x-asymmetry of the nose tip between the two tragion
- * points. Zero at zero yaw; sign matches yaw direction. Always computed as a
- * cross-check even when the matrix is present.
+ * Landmark yaw proxy: nose-tip displacement projected onto the cheek-to-cheek
+ * axis. Projection, unlike screen-x distances, is invariant to in-plane roll.
+ * Natural asymmetry can move this proxy; it is not an anatomical yaw measure
+ * and must never overrule a valid pose matrix.
  */
 export function yawAsymmetry(pts: Pt[]): number {
-  const nose = pts[PRONASALE]!;
-  const tr = pts[R_TRAGION]!;
-  const tl = pts[L_TRAGION]!;
-  const dR = Math.abs(nose.x - tr.x);
-  const dL = Math.abs(tl.x - nose.x);
+  const nose = pts[PRONASALE];
+  const tr = pts[R_TRAGION];
+  const tl = pts[L_TRAGION];
+  if (!nose || !tr || !tl || [nose, tr, tl].some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y))) return 0;
+  const ax = tl.x - tr.x, ay = tl.y - tr.y;
+  const width = Math.hypot(ax, ay);
+  if (!Number.isFinite(width) || width <= 1e-8) return 0;
+  const projected = ((nose.x - tr.x) * ax + (nose.y - tr.y) * ay) / width;
+  const dR = Math.abs(projected);
+  const dL = Math.abs(width - projected);
   const sum = dL + dR;
   if (sum === 0) return 0;
   return (dL - dR) / sum;
@@ -93,23 +126,15 @@ export function estimatePose(
   transformationMatrix: number[] | undefined,
 ): PoseEstimate {
   const yawAsym = yawAsymmetry(pts);
-  if (transformationMatrix && transformationMatrix.length === 16) {
+  if (isValidPoseMatrix(transformationMatrix)) {
     const e = eulerFromMatrix(transformationMatrix);
-    const proxyYawDeg = yawAsym * YAW_PROXY_TO_DEG;
-    // If matrix and proxy disagree in sign beyond noise, trust the proxy path.
-    const disagree =
-      Math.abs(e.yawDeg) > 3 &&
-      Math.abs(proxyYawDeg) > 3 &&
-      Math.sign(e.yawDeg) !== Math.sign(proxyYawDeg);
-    if (!disagree) {
-      return {
-        yawDeg: e.yawDeg,
-        pitchDeg: e.pitchDeg,
-        rollDeg: e.rollDeg,
-        source: "matrix",
-        yawAsym,
-      };
-    }
+    return {
+      yawDeg: e.yawDeg,
+      pitchDeg: e.pitchDeg,
+      rollDeg: e.rollDeg,
+      source: "matrix",
+      yawAsym,
+    };
   }
   return {
     yawDeg: yawAsym * YAW_PROXY_TO_DEG,

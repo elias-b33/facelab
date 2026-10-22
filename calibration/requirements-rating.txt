@@ -1,0 +1,2 @@
+# Offline training only. No browser/runtime dependency is added.
+numpy>=2.0,<3

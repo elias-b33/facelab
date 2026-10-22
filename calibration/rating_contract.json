@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "facelab-ridge-rating",
+  "featureSchema": "facelab-frontal-geometry-v1",
+  "featureKeys": [
+    "canthalTilt",
+    "eyeSeparationRatio",
+    "eyeSymmetry",
+    "midLowerThird",
+    "facialFifths",
+    "midfaceRatio",
+    "fwhr",
+    "jawToCheekbone",
+    "chinToPhiltrum",
+    "lipRatio",
+    "mouthToNoseWidth",
+    "eyeToMouthAngle",
+    "overallSymmetry",
+    "jawSymmetry",
+    "jawAngularity",
+    "browPosition"
+  ],
+  "quality": {
+    "minimumFeatureConfidence": 0.5,
+    "maxAbsZ": 6
+  },
+  "minimumSubjects": {
+    "total": 100,
+    "training": 40,
+    "validation": 15,
+    "calibration": 20,
+    "test": 20
+  },
+  "minimumRatersPerPhoto": 5,
+  "maxStringLength": 4000,
+  "defaultCoverage": 0.9,
+  "coverageMin": 0.5,
+  "coverageMax": 0.99,
+  "regularizationCandidates": [0.01, 0.1, 1, 10, 100],
+  "basisCandidates": ["linear", "quadratic"],
+  "target": "Mean human-panel rating on the source's declared scale; never a universal or theoretical attractiveness scale."
+}

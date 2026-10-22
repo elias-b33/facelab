@@ -24,14 +24,13 @@ import { dx, dy, pt } from "../landmarks/accessors";
 import {
   boxDownsample,
   clampRect,
-  clippedFraction,
   cropGray,
-  laplacianSharpness,
   toGray,
   type GrayPlane,
 } from "../image/ops";
 import { regionalResiduals } from "../procrustes";
 import { computeJawEdgeSupport } from "../metrics/registry";
+import { buildImageFrame } from "../normalize";
 
 // Thresholds. Values marked CALIBRATE are first-guess constants to be
 // re-anchored with the calibrate harness on a real photo corpus.
@@ -52,17 +51,15 @@ const BLUR_DEGRADE = 0.018; // CALIBRATE
 const CLIP_REJECT = 0.12;
 const CLIP_DEGRADE = 0.06;
 const BLINK_REJECT = 0.55;
-const EAR_REJECT = 0.15;
+const EAR_SMALL = 0.15;
 const EAR_ASYM_WARN = 0.07;
 const JAW_OPEN_REJECT = 0.3;
 const JAW_OPEN_WARN = 0.18;
 const SMILE_REJECT = 0.45;
 const SMILE_WARN = 0.28;
-// Normal anatomical variation from the canonical AVERAGE face is large —
-// these must only trip on landmark hallucination (hand/mask/hair), never on
-// an unusual-but-visible face. Block is reserved for egregious misfits.
-const RESIDUAL_BLOCK = 0.4; // CALIBRATE
-const RESIDUAL_DEGRADE = 0.16; // CALIBRATE
+// Distance from one canonical shape cannot establish occlusion or accuracy.
+// Keep this as an overlay-review diagnostic, without penalizing face shape.
+const RESIDUAL_REVIEW = 0.16; // CALIBRATE
 const JAW_EDGE_MIN = 0.25; // CALIBRATE
 
 function gate(
@@ -107,12 +104,69 @@ function faceOvalBounds(f: Frame): { x: number; y: number; w: number; h: number 
   return { x, y: yTopImage, w, h };
 }
 
+/** Pixel quality inside the detected face oval. A padded rectangle includes
+ * background, so a white wall used to reject a correctly exposed face and
+ * sharp wallpaper could make a blurred face appear focused. Erode the mask
+ * by two sampled pixels before computing the Laplacian to exclude silhouette
+ * edges and pixels mixed with the background during downsampling. */
+function faceImageQuality(gray: GrayPlane, imageFrame: Frame): { sharpness: number; clipped: number } {
+  const bounds = clampRect(faceOvalBounds(imageFrame), gray.width, gray.height);
+  const factor = Math.max(1, Math.ceil(Math.max(bounds.w, bounds.h) / 512));
+  const roi = boxDownsample(cropGray(gray, bounds), 512);
+  const polygon = FACE_OVAL.map(i => {
+    const p = pt(imageFrame, i);
+    return { x: (p.x - bounds.x) / factor, y: (imageFrame.imageHeight - p.y - bounds.y) / factor };
+  });
+  const { width: w, height: h, g } = roi;
+  const mask = new Uint8Array(w * h);
+  // Scanline rasterization is linear in the number of face pixels, with no
+  // color/skin-tone threshold and no background assumptions.
+  for (let y = 0; y < h; y++) {
+    const intersections: number[] = [], scanY = y + .5;
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i]!, b = polygon[(i + 1) % polygon.length]!;
+      if ((a.y > scanY) !== (b.y > scanY)) intersections.push(a.x + (scanY - a.y) * (b.x - a.x) / (b.y - a.y));
+    }
+    intersections.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < intersections.length; i += 2) {
+      const x0 = Math.max(0, Math.ceil(intersections[i]! - .5));
+      const x1 = Math.min(w - 1, Math.floor(intersections[i + 1]! - .5));
+      if (x1 >= x0) mask.fill(1, y * w + x0, y * w + x1 + 1);
+    }
+  }
+  let count = 0, sum = 0, sum2 = 0, clipped = 0, lapSum = 0, lapSum2 = 0;
+  for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
+    const i = y * w + x;
+    let interior = !!mask[i];
+    for (let dy = -2; dy <= 2 && interior; dy++) for (let dx = -2; dx <= 2; dx++) {
+      if (!mask[i + dy * w + dx]) { interior = false; break; }
+    }
+    if (!interior) continue;
+    const v = g[i]!;
+    const lap = g[i - 1]! + g[i + 1]! + g[i - w]! + g[i + w]! - 4 * v;
+    count++; sum += v; sum2 += v * v; lapSum += lap; lapSum2 += lap * lap;
+    if (v <= 6 || v >= 249) clipped++;
+  }
+  if (count < 9) return { sharpness: 0, clipped: 1 };
+  const variance = Math.max(0, sum2 / count - (sum / count) ** 2);
+  const lapVariance = Math.max(0, lapSum2 / count - (lapSum / count) ** 2);
+  return { sharpness: lapVariance / Math.max(variance, 1), clipped: clipped / count };
+}
+
 export function runGates(input: ScanInput, frame: Frame): GateReport {
   const blocking: Gate[] = [];
   const warnings: Gate[] = [];
   let confidenceMultiplier = 1;
   const regionConfidence: Partial<Record<FaceRegion, number>> = {};
   let jawEdgeSupport: number | null = null;
+
+  if (!Number.isFinite(frame.scale) || frame.scale <= 1e-8) {
+    return {
+      pass: false,
+      blocking: [gate("degenerate-landmarks", "block", "The eye reference points cannot define a measurement scale.", "Run detection again on a clear, front-facing photo.")],
+      warnings, confidenceMultiplier: 0, regionConfidence, jawEdgeSupport,
+    };
+  }
 
   // 4.3 — face size
   if (frame.scale < MIN_IPD_PX) {
@@ -162,14 +216,15 @@ export function runGates(input: ScanInput, frame: Frame): GateReport {
       confidenceMultiplier *= 0.6;
     }
   } else {
+    warnings.push(gate("pose-proxy", "warn", "Head alignment uses a landmark estimate; up/down tilt could not be checked.", "Use an eye-level, straight-on photo and inspect the landmark overlay."));
     const ap = Math.abs(frame.yawAsym);
     if (ap > YAW_PROXY_DEGRADE) {
       blocking.push(
-        gate("yaw", "block", "Your head is turned too far to the side.", "Retake: face the camera straight on."),
+        gate("yaw", "block", "The landmark alignment is too uneven for reliable front-view measurements.", "Face the camera straight on and check the detected points."),
       );
     } else if (ap > YAW_PROXY_FULL) {
       warnings.push(
-        gate("yaw-mild", "warn", "Your head is slightly turned; width measurements lose precision.", "Face the camera straight on."),
+        gate("yaw-mild", "warn", "Landmark alignment suggests a possible head turn; width measurements may lose precision.", "Face the camera straight on and check the detected points."),
       );
       confidenceMultiplier *= 0.6;
     }
@@ -196,7 +251,8 @@ export function runGates(input: ScanInput, frame: Frame): GateReport {
     confidenceMultiplier *= 0.85;
   }
 
-  // 4.7 — eyes closed: blendshapes primary, EAR cross-check.
+  // 4.7 — blink evidence is primary. A small opening ratio alone can be a
+  // person's eye shape, so it cannot establish that the eye is closed.
   const bs = input.blendshapes;
   const blinkR = bs?.["eyeBlinkRight"];
   const blinkL = bs?.["eyeBlinkLeft"];
@@ -205,14 +261,19 @@ export function runGates(input: ScanInput, frame: Frame): GateReport {
   const blendClosed =
     (blinkR !== undefined && blinkR > BLINK_REJECT) ||
     (blinkL !== undefined && blinkL > BLINK_REJECT);
-  const earClosed = earR < EAR_REJECT || earL < EAR_REJECT;
-  if (blendClosed || earClosed) {
+  const unresolvedEye = !Number.isFinite(earR) || !Number.isFinite(earL) || earR <= 0 || earL <= 0;
+  if (blendClosed) {
     blocking.push(
       gate("eyes-closed", "block", "One or both eyes look closed.", "Keep both eyes open and look at the camera."),
     );
+  } else if (unresolvedEye) {
+    blocking.push(gate("eyes-unresolved", "block", "The eyelid landmarks do not define a measurable eye opening.", "Use a sharp photo with visible eyes and check the detected points."));
+  } else if ((blinkR === undefined || blinkL === undefined) && (earR < EAR_SMALL || earL < EAR_SMALL)) {
+    warnings.push(gate("eye-opening-uncertain", "warn", "The eye opening is small and blink evidence is unavailable.", "Check that the eyelid points match the visible opening."));
+    regionConfidence.eyes = Math.min(regionConfidence.eyes ?? 1, .6);
   } else if (Math.abs(earR - earL) > EAR_ASYM_WARN) {
     warnings.push(
-      gate("eye-squint", "warn", "One eye looks like it's squinting; eye symmetry loses precision.", "Relax both eyes evenly."),
+        gate("eye-squint", "warn", "The measured eye openings differ; check for a blink or misplaced eyelid points.", "Relax your eyes and inspect the landmark overlay."),
     );
     regionConfidence.eyes = Math.min(regionConfidence.eyes ?? 1, 0.6);
   }
@@ -231,40 +292,33 @@ export function runGates(input: ScanInput, frame: Frame): GateReport {
     confidenceMultiplier *= 0.8;
   }
 
-  // 4.9a — occlusion via regional Procrustes residuals
+  // 4.9a — reference-fit diagnostic. Shape difference is not proof of
+  // occlusion, and cannot be used to punish natural facial variation.
   const residuals = regionalResiduals(frame);
   for (const region of Object.keys(residuals.byRegion) as FaceRegion[]) {
     const r = residuals.byRegion[region];
-    if (r > RESIDUAL_BLOCK) {
-      blocking.push(
-        gate(
-          `occlusion-${region}`,
-          "block",
-          `Part of your face (${region}) can't be measured — something is covering it.`,
-          "Pull hair back, remove glasses, and keep hands away from your face.",
-        ),
-      );
-    } else if (r > RESIDUAL_DEGRADE) {
+    if (r > RESIDUAL_REVIEW) {
       warnings.push(
         gate(
-          `occlusion-${region}-mild`,
+          `landmark-fit-${region}`,
           "warn",
-          `The ${region} region reads as partially obscured.`,
-          "Pull hair back and remove glasses for a cleaner read.",
+          `The ${region} landmarks differ from the reference shape; this can be natural variation or detection error.`,
+          "Inspect the points on the photo and correct them if they miss the visible features.",
         ),
       );
-      regionConfidence[region] = Math.min(regionConfidence[region] ?? 1, 0.35);
     }
   }
 
   // Image-dependent gates
   if (input.image) {
+    // The photo itself is neither roll-corrected nor de-mirrored. Using
+    // measurement coordinates here sampled background or the other cheek.
+    const imageFrame = buildImageFrame(input, frame);
     const gray = toGray(input.image);
-    const bounds = clampRect(faceOvalBounds(frame), gray.width, gray.height);
-    const roi = boxDownsample(cropGray(gray, bounds), 512);
+    const quality = faceImageQuality(gray, imageFrame);
 
     // 4.5 — blur
-    const sharp = laplacianSharpness(roi);
+    const sharp = quality.sharpness;
     if (sharp < BLUR_REJECT) {
       blocking.push(gate("blur", "block", "The photo is too blurry to measure.", "Hold still and tap to focus, then retake."));
     } else if (sharp < BLUR_DEGRADE) {
@@ -273,7 +327,7 @@ export function runGates(input: ScanInput, frame: Frame): GateReport {
     }
 
     // 4.6 — exposure
-    const clipped = clippedFraction(roi);
+    const clipped = quality.clipped;
     if (clipped > CLIP_REJECT) {
       blocking.push(gate("exposure", "block", "The lighting is too dark or too bright.", "Face a window with soft, even light."));
     } else if (clipped > CLIP_DEGRADE) {
@@ -282,7 +336,7 @@ export function runGates(input: ScanInput, frame: Frame): GateReport {
     }
 
     // 4.9b — jaw edge support (never blocks; degrades jawline definition)
-    jawEdgeSupport = computeJawEdgeSupport(frame, gray);
+    jawEdgeSupport = computeJawEdgeSupport(imageFrame, gray);
     if (jawEdgeSupport < JAW_EDGE_MIN) {
       warnings.push(
         gate(
@@ -294,7 +348,7 @@ export function runGates(input: ScanInput, frame: Frame): GateReport {
       );
       regionConfidence.jaw = Math.min(regionConfidence.jaw ?? 1, 0.3);
     }
-  }
+  } else warnings.push(gate("image-quality-unchecked", "warn", "Photo sharpness, lighting and visible jaw-edge evidence were not checked.", "Analyze the original photo to include image-quality checks."));
 
   return {
     pass: blocking.length === 0,

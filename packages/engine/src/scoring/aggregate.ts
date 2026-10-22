@@ -51,10 +51,16 @@ export function aggregate(
     let scoreSum = 0;
     // Missing or invalid measurements still consume their expected weight.
     // Otherwise dropping most of an area could falsely report full coverage.
-    const weightSum = Object.values(weights).reduce((sum, w) => w.area === area && Number.isFinite(w.weight) && w.weight > 0 ? sum + w.weight : sum, 0);
+    const weightSum = Object.values(weights)
+      .filter(w => w.area === area && Number.isFinite(w.weight) && w.weight > 0)
+      .reduce((sum, w) => sum + w.weight, 0);
+    const seen = new Set<string>();
     for (const m of metrics) {
       const w = weights[m.key];
-      if (!w || w.area !== area || !Number.isFinite(w.weight) || w.weight <= 0 || !Number.isFinite(m.value) || !Number.isFinite(m.score) || m.score < 0 || m.score > 100 || !Number.isFinite(m.confidence) || m.confidence < 0 || m.confidence > 1) continue;
+      if (!w || w.area !== area || !Number.isFinite(w.weight) || w.weight <= 0 || seen.has(m.key)) continue;
+      seen.add(m.key);
+      if (!Number.isFinite(m.value) || !Number.isFinite(m.score) || m.score < 0 || m.score > 100 ||
+          !Number.isFinite(m.confidence) || m.confidence < 0 || m.confidence > 1) continue;
       const eff = w.weight * m.confidence;
       effSum += eff;
       scoreSum += eff * m.score;
@@ -86,7 +92,7 @@ export function aggregate(
     num += w * a.score;
     den += w;
   }
-  if (den === 0) return { areas, overall: null, tier: null };
+  if (den === 0 || !Number.isFinite(num) || !Number.isFinite(den)) return { areas, overall: null, tier: null };
   const overall = round1(num / den);
   return { areas, overall, tier: tierOf(overall) };
 }

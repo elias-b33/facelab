@@ -94,6 +94,25 @@ export function canonicalInput(overrides?: Partial<ScanInput>): ScanInput {
   };
 }
 
+/** Synthetic 478-point protocol fixture, not observed iris ground truth.
+ * The canonical model has 468 vertices. Append iris centers at the eye-corner
+ * midpoints and four artificial ring points to exercise iris-based code paths
+ * without changing the existing 468-point geometry fixtures. */
+export function canonicalIrisInput(overrides?: Partial<ScanInput>): ScanInput {
+  const input = canonicalInput();
+  const iris = (outer: number, inner: number): Pt[] => {
+    const a = input.landmarks[outer]!;
+    const b = input.landmarks[inner]!;
+    const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+    const rx = Math.abs(a.x - b.x) * 0.15;
+    const ry = rx * input.imageWidth / input.imageHeight;
+    return [center,
+      { ...center, x: center.x + rx }, { ...center, y: center.y - ry },
+      { ...center, x: center.x - rx }, { ...center, y: center.y + ry }];
+  };
+  return { ...input, landmarks: [...input.landmarks, ...iris(33, 133), ...iris(263, 362)], ...overrides };
+}
+
 export function metricValue(
   result: ReturnType<typeof import("../src/index").analyze>,
   key: string,

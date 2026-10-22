@@ -65,8 +65,8 @@ Use the same browser and the exact same address to keep your history together.
   classic results view, without rewriting the original saved measurements.
 - Optional local Ollama integration, off by default. No cloud AI integration.
 
-Scores inherit FreeHarmony's reference model. They describe photographed
-geometry; this fork does not reproduce FaceIQ Labs' proprietary scores or
+The original harmony scores inherit FreeHarmony's reference model. They describe
+photographed geometry; this fork does not reproduce FaceIQ Labs' proprietary scores or
 establish a universal attractiveness scale. Keep lighting, distance and head
 position consistent, and review the points before interpreting a change.
 
@@ -84,6 +84,54 @@ Every definition has an independent numerical fixture. Seeded transformation
 tests check all values under translation, scaling, rotation, mirroring of a
 profile and changes in image aspect. Missing leveling points, invalid angles
 and insufficient score coverage produce explicit missing/invalid results.
+
+## Supervised human-rating model
+
+The app now has a separate, local **mean human-rating prediction** path. Open
+**Settings → Human-rating model** (`/settings#rating-model`) to import a model
+you have trained and evaluated. No human-rating weights are bundled: without a
+usable model, the report shows that a prediction is unavailable. The original
+geometric harmony index remains separate.
+
+The offline pipeline fits a small ridge model to 16 existing geometric
+summaries. It separates people into training, validation, calibration and test
+sets, reports errors against a mean-score baseline, preserves the source label
+scale, and records refused photos. It does not establish a universal 1–10 looks
+scale. See [the complete model specification](docs/RATING_MODEL.md) for the
+math, evidence, feature limitations, JSONL schemas and evaluation requirements.
+Start with [the dataset/protocol manifest template](calibration/rating-manifest.example.json),
+replacing its placeholders with actual source information; it contains no data
+or evidence of accuracy.
+
+A [prior repository experiment](docs/RATING_MODEL.md#prior-repository-experiment)
+reported London Set test MAE 0.696 on a 1–7 scale versus 0.673 for the mean
+baseline, with 18 accepted test people. It did not beat that baseline. Those
+results were not rerun for this version, and the earlier artifact needs new
+extraction, training and evaluation before it can meet the current contract.
+
+For a local dataset, keep the photo manifest, labels and pixels in the ignored
+`calibration/private/` directory and experiments in `calibration/outputs/`.
+The example below uses PowerShell from the repository root after preparing the
+actual `photos.jsonl` and dataset `manifest.json`. Install
+`calibration/requirements-extraction.txt` and
+`calibration/requirements-rating.txt` in your Python environment first, and run
+`pnpm setup:assets` if the pinned face model is not present.
+
+```powershell
+$ratingData = Join-Path (Get-Location).Path "calibration/private"
+$ratingOutput = Join-Path (Get-Location).Path "calibration/outputs"
+python calibration/extract_rating_landmarks.py --manifest "$ratingData/photos.jsonl" --out "$ratingData/rating-landmarks.jsonl" --pixels-dir "$ratingData/pixels"
+pnpm --filter @freeharmony/engine export:rating --input "$ratingData/rating-landmarks.jsonl" --out "$ratingData/features-and-ratings.jsonl"
+python calibration/train_rating.py --input "$ratingData/features-and-ratings.jsonl" --manifest "$ratingData/manifest.json" --out "$ratingOutput/rating-model.json" --report "$ratingOutput/evaluation.json" --splits "$ratingOutput/subject-splits.json"
+```
+
+Include actual `rating` objects in the photo manifest, or add
+`--labels "$ratingData/labels.jsonl"` to the feature-export command for an exact
+ID join. Verified person IDs and front views are required. Actual RGBA pixels
+are used for production photo-quality checks; missing pixels leave a refused
+row in the audit. Extractor/browser preprocessing is not bit-identical and needs
+separate deployed evaluation. Synthetic fixtures test software only and are
+rejected for ratings of real photographs.
 
 ## Create a complete report
 

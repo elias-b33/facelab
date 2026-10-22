@@ -24,10 +24,10 @@ const METRIC_NORMS: Record<string, NormTable> = (
 const SCORE_STATS: { overall: OverallScoreStats } | null =
   (normsData as { scores?: { overall: OverallScoreStats } }).scores ?? null;
 
-export const NORMS_META = (normsData as { meta: { source: string; faces: number } }).meta;
+export const NORMS_META = (normsData as { meta: { source: string; faces: number; engineVersion?: string } }).meta;
 
 /**
- * Population percentile of a raw metric value, from the calibration corpus
+ * Reference-corpus percentile of a raw metric value, from the calibration corpus
  * (piecewise-linear over the stored percentile table). Returns null when no
  * corpus has been baked in. Deterministic: a static lookup, not a model.
  */
@@ -53,7 +53,7 @@ function interpolate(p: number[], pcts: number[], value: number): number {
 }
 
 /**
- * Population percentile of an overall harmony score (calibrated profile),
+ * Reference-corpus percentile of an overall harmony score (calibrated profile),
  * from the corpus score distribution. Null before score-space calibration.
  */
 export function overallPercentileOf(overall: number): number | null {
@@ -64,10 +64,9 @@ export function overallPercentileOf(overall: number): number | null {
 }
 
 /**
- * Population-standardized overall score: a T-score centered on the corpus
- * (median face ⇒ 50, each 15 points ≈ one population SD), clamped to [1, 99].
- * This is the "how do I compare" number; the harmony % stays the
- * "how close to the aesthetic bands" number.
+ * Reference-corpus standardized geometry index (mean ⇒ 50, 15 points per
+ * corpus SD), clamped to [1, 99]. This is neither a human-rating model nor a
+ * representative-population norm. The corpus contains unlabeled internet photos.
  */
 export function standardizedOverall(overall: number): number | null {
   if (!SCORE_STATS || !Number.isFinite(overall)) return null;

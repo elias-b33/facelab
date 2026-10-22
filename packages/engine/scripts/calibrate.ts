@@ -10,7 +10,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { analyze } from "../src/index";
+import { analyze, ENGINE_VERSION } from "../src/index";
 import { BANDS, resolveBand } from "../src/scoring/bands";
 import type { MetricKey, Pt, ScanInput } from "../src/types";
 
@@ -155,10 +155,11 @@ console.log(
 
 const out = {
   meta: {
+    engineVersion: ENGINE_VERSION,
     source: "FFHQ (Flickr-Faces-HQ) 512px mirror — aggregate statistics only, no images retained",
     faces: used,
     engineNote:
-      "values computed by the production engine formulas (sex-independent); score stats under the 'calibrated' band profile. Corpus is broad internet photos, unlabeled — norms are vs. a general population, not per-group.",
+      "Values computed by the production engine formulas (sex-independent); score stats under the 'calibrated' band profile. This unlabeled convenience sample provides reference-corpus geometry statistics, not representative population norms or human attractiveness labels.",
   },
   metrics: norms,
   scores: scoreStats,
