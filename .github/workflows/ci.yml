@@ -24,6 +24,11 @@ jobs:
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm typecheck
       - run: corepack pnpm test
+      - name: Verify rating training protocol without downloading face data
+        run: |
+          python3 -m venv calibration/rating/.venv
+          calibration/rating/.venv/bin/python -m pip install --disable-pip-version-check numpy==2.4.6 Pillow==12.2.0
+          calibration/rating/.venv/bin/python -m unittest discover -s calibration/rating -p 'test_*.py' -v
       - run: corepack pnpm build:vercel
         env:
           VERCEL: "1"

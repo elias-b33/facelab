@@ -1,0 +1,5 @@
+# Exact versions used for the local 102-person automatic extraction.
+# Training itself requires only NumPy; extraction additionally needs Pillow/MP.
+numpy==2.4.6
+Pillow==12.2.0
+mediapipe==0.10.35

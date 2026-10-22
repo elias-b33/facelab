@@ -70,6 +70,26 @@ geometry; this fork does not reproduce FaceIQ Labs' proprietary scores or
 establish a universal attractiveness scale. Keep lighting, distance and head
 position consistent, and review the points before interpreting a change.
 
+## Appearance prediction research
+
+The dossier labels the existing alignment score as a **0–100 geometry index**.
+Dividing it by ten does not turn it into a calibrated looks rating. A separate
+local research preview can load a model trained on independent human photo
+ratings; no appearance model is installed by default.
+
+The new `packages/engine/src/rating/` API extracts versioned raw geometry,
+excludes unreviewed anatomical estimates, preserves missing values and evaluates
+portable ridge-regression models with capture checks, support checks and
+split-conformal prediction intervals. Inference uses the training dataset's
+original label scale. The optional strict 1–10 display function is a documented
+convention, not evidence of population rarity, and is not applied to pilots.
+
+See [the mathematical method and evidence](docs/face-rating-method.md) and
+[the reproducible local evaluation pipeline](calibration/rating/README.md).
+Research model files, photographs and extracted face data remain local. The
+research preview accepts a model JSON file and can export measurement features;
+neither action uploads anything or supplies new human training labels.
+
 The current [public definition index](https://www.faceiqlabs.com/support/harmony)
 contains 71 guides (36 front, 35 side); its overview also says 37 front + 33 side.
 This version implements every definition in the detailed index, rather than
