@@ -196,6 +196,7 @@ export type {
 export { CANONICAL_VERTS } from "./landmarks/canonical";
 export { regionalResiduals } from "./procrustes";
 export * from "./harmony/index";
+export * from "./rating/index";
 export {
   estimatePose,
   eulerFromMatrix,
