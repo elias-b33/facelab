@@ -161,7 +161,7 @@ export interface MetricResult {
   verdict: Verdict;
   confidence: number;
   flags: string[];
-  /** Population percentile from the calibration corpus; null pre-calibration. */
+  /** Reference-corpus geometry percentile, not attractiveness or a population norm. */
   percentile: number | null;
   detail?: Record<string, number | number[]>;
 }
@@ -179,9 +179,9 @@ export interface ScanResult {
   areas: Record<AreaKey, AreaResult>;
   /** Overall harmony %, one decimal — null when refused. */
   overall: number | null;
-  /** Population percentile of `overall` from the calibration corpus. */
+  /** Reference-corpus percentile of `overall`; not a human attractiveness ranking. */
   overallPercentile: number | null;
-  /** T-score vs. the corpus: median face = 50, 15 pts ≈ 1 population SD. */
+  /** Geometry index vs. the corpus: mean = 50, 15 pts = 1 corpus SD. */
   standardized: number | null;
   tier: Tier | null;
   engineVersion: string;

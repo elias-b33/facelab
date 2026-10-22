@@ -16,3 +16,7 @@ __pycache__/
 calibration/reference-library/
 calibration/sample-faces-mebeauty/
 calibration/reference-target.json
+
+# Private rating labels, person splits, model experiments, and extracted pixels.
+calibration/private/
+calibration/outputs/

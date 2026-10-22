@@ -2,7 +2,7 @@
  "meta": {
   "source": "FFHQ (Flickr-Faces-HQ) 512px mirror — aggregate statistics only, no images retained",
   "faces": 3125,
-  "engineNote": "values computed by the production engine formulas (sex-independent); score stats under the 'calibrated' band profile. Corpus is broad internet photos, unlabeled — norms are vs. a general population, not per-group."
+  "engineNote": "Values computed by the original engine formulas (sex-independent); legacy score stats under the 'calibrated' band profile. This is an unlabeled convenience sample of internet photos, not a representative population or attractiveness dataset. No human-rating accuracy is established."
  },
  "metrics": {
   "canthalTilt": {

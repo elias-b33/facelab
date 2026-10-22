@@ -12,9 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "calibrate": "tsx scripts/calibrate.ts"
+    "calibrate": "tsx scripts/calibrate.ts",
+    "export:rating": "node --import tsx scripts/export-rating-features.ts"
   },
   "devDependencies": {
+    "@types/node": "^24",
     "fast-check": "^3.23.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

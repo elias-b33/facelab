@@ -5,19 +5,21 @@ import type {
   ScanInput,
   ScanResult,
 } from "./types";
-import { buildFrame } from "./normalize";
+import { buildFrame, validateScanInput } from "./normalize";
 import { runGates } from "./gates/index";
 import { METRICS } from "./metrics/registry";
 import { resolveBand } from "./scoring/bands";
 import { round1, subScore, verdictOf } from "./scoring/curve";
 import { aggregate } from "./scoring/aggregate";
 import {
+  NORMS_META,
   overallPercentileOf,
   percentileOf,
   standardizedOverall,
 } from "./scoring/norms";
+import { ENGINE_VERSION } from "./version";
 
-export const ENGINE_VERSION = "0.1.0-local.2";
+export { ENGINE_VERSION } from "./version";
 
 const EMPTY_AREAS: Record<AreaKey, { score: null; confidence: number }> = {
   symmetry: { score: null, confidence: 0 },
@@ -31,24 +33,14 @@ const EMPTY_AREAS: Record<AreaKey, { score: null; confidence: number }> = {
  * byte-identical result. No DOM, no I/O, no randomness, no clock.
  */
 export function analyze(input: ScanInput): ScanResult {
-  const sex = input.sex ?? "neutral";
-  const bandProfile = input.bandProfile ?? "faceharmony-parity";
+  const sex = input?.sex ?? "neutral";
+  const bandProfile = input?.bandProfile ?? "faceharmony-parity";
 
-  const missingFace = input.landmarks.length !== 468 && input.landmarks.length !== 478;
-  const invalidImage = !Number.isFinite(input.imageWidth) || !Number.isFinite(input.imageHeight) || input.imageWidth <= 0 || input.imageHeight <= 0;
-  const invalidLandmarks = Array.from(input.landmarks).some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z))
-    || Object.values(input.overrides ?? {}).some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y));
-  if (missingFace || invalidImage || invalidLandmarks) {
+  const inputErrors = validateScanInput(input);
+  if (inputErrors.length) {
     const gates: GateReport = {
       pass: false,
-      blocking: [
-        {
-          code: missingFace ? "no-face" : invalidImage ? "invalid-image" : "invalid-landmarks",
-          severity: "block",
-          message: missingFace ? "No face detected." : invalidImage ? "The image dimensions are invalid." : "The landmark coordinates contain an invalid number.",
-          retake: missingFace ? "Center your face in the frame with good lighting." : "Select a valid photograph and detect the landmarks again.",
-        },
-      ],
+      blocking: inputErrors,
       warnings: [],
       confidenceMultiplier: 1,
       regionConfidence: {},
@@ -103,6 +95,7 @@ export function analyze(input: ScanInput): ScanResult {
   const weights: Record<string, { area: AreaKey; weight: number }> = {};
 
   for (const def of METRICS) {
+    // Coverage includes every expected measurement, including missing ones.
     weights[def.key] = { area: def.area, weight: def.weight };
     const computed = def.compute(frame, ctx);
     if (computed === null) continue;
@@ -165,11 +158,11 @@ export function analyze(input: ScanInput): ScanResult {
     areas: agg.areas,
     overall: agg.overall,
     overallPercentile:
-      agg.overall !== null && bandProfile === "calibrated"
+      agg.overall !== null && bandProfile === "calibrated" && NORMS_META.engineVersion === ENGINE_VERSION
         ? overallPercentileOf(agg.overall)
         : null,
     standardized:
-      agg.overall !== null && bandProfile === "calibrated"
+      agg.overall !== null && bandProfile === "calibrated" && NORMS_META.engineVersion === ENGINE_VERSION
         ? standardizedOverall(agg.overall)
         : null,
     tier: agg.tier,
@@ -181,7 +174,7 @@ export function analyze(input: ScanInput): ScanResult {
 
 // Public surface
 export * from "./types";
-export { buildFrame } from "./normalize";
+export { buildFrame, validateScanInput } from "./normalize";
 export { runGates, eyeAspectRatio } from "./gates/index";
 export { METRICS, TRICHION_K, computeJawEdgeSupport } from "./metrics/registry";
 export { BANDS, resolveBand } from "./scoring/bands";
@@ -212,6 +205,7 @@ export type {
 export { CANONICAL_VERTS } from "./landmarks/canonical";
 export { regionalResiduals } from "./procrustes";
 export * from "./harmony/index";
+export * from "./rating/index";
 export {
   estimatePose,
   eulerFromMatrix,

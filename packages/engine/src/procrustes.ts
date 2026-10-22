@@ -11,9 +11,10 @@ export interface RegionResiduals {
 
 /**
  * Rigid-similarity fit of the observed landmarks to the canonical model.
- * A region whose residual is large is being extrapolated, not observed —
- * glasses, hair, hand, mask. Residuals are normalized by IPD so thresholds
- * are resolution-independent.
+ * A large residual means a region differs from this reference shape. That
+ * may be natural morphology or landmark error: residuals alone do not detect
+ * occlusion or estimate landmark accuracy. Residuals are normalized by IPD
+ * so the diagnostic is resolution-independent.
  *
  * The fit is deliberately 2D (z zeroed on both sides): real MediaPipe z is
  * noisy with an inconsistent depth scale, and including it makes a healthy

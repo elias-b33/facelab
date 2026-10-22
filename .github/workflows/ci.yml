@@ -24,6 +24,11 @@ jobs:
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm typecheck
       - run: corepack pnpm test
+      - name: Check the offline rating trainer and photo extraction contract
+        run: |
+          python3 -m venv /tmp/facelab-rating-ci
+          /tmp/facelab-rating-ci/bin/python -m pip install -r calibration/requirements-rating.txt Pillow==12.3.0
+          /tmp/facelab-rating-ci/bin/python -m unittest discover -s calibration -p 'test_*.py'
       - run: corepack pnpm build:vercel
         env:
           VERCEL: "1"

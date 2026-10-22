@@ -38,7 +38,9 @@ export function distPts(a: Pt, b: Pt): number {
   return Math.sqrt(ddx * ddx + ddy * ddy);
 }
 
-/** Angle at vertex v between rays v→a and v→b, in degrees [0, 180]. */
+/** Angle at vertex v between rays v→a and v→b, in degrees [0, 180].
+ * Coincident rays are undefined (NaN), not a measured zero-degree angle.
+ * The analysis entry point excludes non-finite measurements from scoring. */
 export function angleAt(f: Frame, v: number, a: number, b: number): number {
   const pv = pt(f, v);
   const pa = pt(f, a);
@@ -49,7 +51,7 @@ export function angleAt(f: Frame, v: number, a: number, b: number): number {
   const by = pb.y - pv.y;
   const na = Math.sqrt(ax * ax + ay * ay);
   const nb = Math.sqrt(bx * bx + by * by);
-  if (!Number.isFinite(na) || !Number.isFinite(nb) || na === 0 || nb === 0) return Number.NaN;
+  if (!Number.isFinite(na) || !Number.isFinite(nb) || na <= 1e-8 || nb <= 1e-8) return Number.NaN;
   let c = (ax * bx + ay * by) / (na * nb);
   if (c > 1) c = 1;
   if (c < -1) c = -1;

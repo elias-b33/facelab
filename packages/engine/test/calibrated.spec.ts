@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyze } from "../src/index";
+import { analyze, ENGINE_VERSION, NORMS_META } from "../src/index";
 import { BANDS, resolveBand } from "../src/scoring/bands";
 import { subScore } from "../src/scoring/curve";
 import {
@@ -98,11 +98,19 @@ describe("score-space standardization", () => {
     expect(midPct).toBeLessThanOrEqual(55);
   });
 
-  it("analyze() only standardizes under the calibrated profile", () => {
+  it("analyze() does not present a legacy score distribution as calibration of the current engine", () => {
     const parity = analyze(canonicalInput({ bandProfile: "faceharmony-parity" }));
     expect(parity.standardized).toBeNull();
+    expect(parity.overallPercentile).toBeNull();
     const cal = analyze(canonicalInput({ bandProfile: "calibrated" }));
-    if (stats) {
+    const corpusEngine = "engineVersion" in NORMS_META ? NORMS_META.engineVersion : undefined;
+    if (corpusEngine !== ENGINE_VERSION) {
+      expect(cal.standardized).toBeNull();
+      expect(cal.overallPercentile).toBeNull();
+      // Existing geometric values still have descriptive raw-value norms;
+      // suppressing stale aggregate calibration does not discard those.
+      expect(cal.metrics.find(metric => metric.key === "canthalTilt")?.percentile).not.toBeNull();
+    } else if (stats) {
       expect(cal.standardized).not.toBeNull();
       expect(cal.overallPercentile).not.toBeNull();
     }

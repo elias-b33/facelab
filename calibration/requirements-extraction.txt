@@ -1,0 +1,6 @@
+# Python 3.11/3.12; use a separate virtual environment for extraction.
+# Official MediaPipe 0.10.32 supports NumPy 2.x. Task model bytes are verified
+# separately against the same SHA-256 pinned by apps/web/scripts/prepare-assets.mjs.
+mediapipe==0.10.32
+numpy==2.3.5
+Pillow==12.3.0
